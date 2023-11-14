@@ -36,7 +36,7 @@ contract CSAMM {
         require(_tokenIn == address(token0) || _tokenIn == address(token1), "invalid token");
 
         bool isToken0 = _tokenIn == address(token0);
-        (IERC20 tokenIn, IERC20 tokenOut) = isToken0 ? (token0, token1, reserve0, reserve1) : (token1, token0, reserve1, reserve0);
+        (IERC20 tokenIn, IERC20 tokenOut, uint resIn, uint resOut) = isToken0 ? (token0, token1, reserve0, reserve1) : (token1, token0, reserve1, reserve0);
 
         // transfer token in
         tokenIn.transferFrom(msg.sender, address(this), _amountIn);

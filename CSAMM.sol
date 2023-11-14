@@ -33,32 +33,69 @@ contract CSAMM {
     }
 
     function swap(address _tokenIn, uint _amountIn) external returns (uint amountOut) {
-        require(_tokenIn == address(token0) || _tokenIn == address(token0),
-        "invalid token");
-        if (_tokenIn == address(token0)) {
-            token0.transferFrom(msg.sender, address(this), _amountIn);
-            amountIn = token0.balanceOf(address(this)) - reserve0;
-        } else {
-            token1.transferFrom(msg.sender, address(this), _amountIn);
-            amountIn = token0.balanceOf(address(this)) - reserve1;
-        }
+        require(_tokenIn == address(token0) || _tokenIn == address(token1), "invalid token");
+
+        bool isToken0 = _tokenIn == address(token0);
+        (IERC20 tokenIn, IERC20 tokenOut) = isToken0 ? (token0, token1, reserve0, reserve1) : (token1, token0, reserve1, reserve0);
+
+        // transfer token in
+        tokenIn.transferFrom(msg.sender, address(this), _amountIn);
+        uint amountIn = tokenIn.balanceOf(address(this)) - reserve0;
+
         // calculate amount out (including fees)
         // dx = dy ; 0.3% fee
         amountOut = (amountIn * 997)/1000;
         //update reserve 0 & reserve 1
-        if (_tokenIn == address(token0)) {
-            _update(reserve0 + _amountIn, reserve1 - amountOut);
-        } else {
-            _update(reserve0 - amountOut, reserve1 + amountIn);
-        }
+        (uint res0, uint res1) = isToken0 
+            ? (resIn + _amountIn, resOut - amountOut)
+            : (resOut - amountOut, resIn + _amountIn);
+        _update(res0, res1);
 
         // transfer token out
-        if (_tokenIn == address(token0)) {
-            token1.transfer(msg.sender, amountOut);
+        tokenOut.transfer(msg.sender, amountOut);
+    }
+
+    function addLiquidity(uint _amount0, uint _amount1) external returns(uint shares) {
+        token0.transferFrom(msg.sender, address(this), _amount0);
+        token1.transferFrom(msg.sender, address(this), _amount1);
+
+        uint bal0 = token0.balanceOf(address(this));
+        uint bal1 = token1.balanceOf(address(this));
+
+        uint d0 = bal0 - reserve0;
+        uint d1 = bal1 - reserve1;
+
+        // a = amount in; L = total liquidity ; T = total supply; s = shares to mint
+
+        // (L + a) / L = (T + s)/T
+        // s  = a * T/L
+
+        if (totalSupply == 0) {
+            shares = d0 + d1;
         } else {
-            token0.transfer(msg.sender, amountOut);
+            shares = ((d0 + d1) * totalSupply)/ (reserve0 + reserve1);
+        }
+
+        require(shares > 0, "shares = 0");
+        _mint(msg.sender, shares);
+        _update(bal0, bal1);
+    }
+
+    function removeLiquidity(uint _shares) external returns (uint d0, uint d1) {
+        // a = amount in; L = total liquidity ; T = total supply; s = shares to mint
+
+        // a / L = s / T
+        // a = L * s / T = (reserve0 + reserve 1) * s / T
+
+        d0 = (reserve0 * _shares) / totalSupply;
+        d1 = (reserve1 * _shares) / totalSupply;
+
+        _burn(msg.sender, _shares);
+        _update(reserve0 - d0, reserve1 - d1);
+
+        if (d0 > 0) {token0.transfer(msg.sender, d0);
+        }
+        if (d1 > 0) {token1.transfer(msg.sender, d1);
         }
     }
-    function addLiquidity() external {}
-    function removeLiquidity() external {}
 }
